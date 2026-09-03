@@ -6,7 +6,7 @@ Java 21 \+ LWJGL 3
 
 A release\-oriented technical specification for building a 3D medieval settlement and life\-simulation game in the spirit of *Manor Lords* and *Life is Feudal: Forest Village*. The roadmap grows the game and its supporting engine together, release by release, rather than building a generic engine up front.
 
-Baseline: Java 21 · Maven · LWJGL 3.4.3 · GLFW · OpenGL 3.3 core · GLSL · JOML 1.10.9 · tinylog 2.7.0\\n
+Baseline: Java 21 · Maven · LWJGL 3.4.3 · GLFW · OpenGL 3.3 core · GLSL · JOML 1.10.9 · tinylog 2.7.0
 
 Prepared: 29 August 2026
 

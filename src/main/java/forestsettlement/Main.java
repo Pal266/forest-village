@@ -1,6 +1,7 @@
 package forestsettlement;
 
 import forestsettlement.properties.SystemProperties;
+import org.lwjgl.Version;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
@@ -20,13 +21,15 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 
 public class Main {
 
-    public long window;
+    private long window;
 
     private Callback debugCallback = null;
 
     private long frameCount = 0;
 
     private void run() {
+        Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
+
         init();
         loop();
 
@@ -94,7 +97,7 @@ public class Main {
     }
 
     private void loop() {
-        GLCapabilities caps = GL.createCapabilities();
+        GL.createCapabilities();
 
         if (SystemProperties.DEBUG_MODE) {
             debugCallback = GLUtil.setupDebugMessageCallback(System.err);
