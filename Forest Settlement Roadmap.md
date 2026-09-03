@@ -102,7 +102,7 @@ Goal. Stand up the smallest reliable Java/LWJGL application: a native window, an
 - LWJGL 3.4.3 core, GLFW and OpenGL modules with the correct platform natives (via the [lwjgl.org/customize](https://www.lwjgl.org/customize) configurator)
 - Create, show, resize and close a GLFW window
 - Make the OpenGL context current and create LWJGL's `GLCapabilities`
-- V\-sync configuration and a framebuffer\-resize callback
+- V\-sync configuration, a framebuffer\-resize callback, and a window\-refresh callback that keeps the window redrawing during an interactive (mouse\-drag) resize
 - An OpenGL debug context/callback enabled in development builds
 - Structured logging via tinylog, writing to both the console and a rolling log file — no raw `System.out`/`System.err` in application code, and GLFW's own error callback routes through it too
 - Deterministic cleanup of callbacks, the window handle and GLFW itself on exit
@@ -111,6 +111,7 @@ Goal. Stand up the smallest reliable Java/LWJGL application: a native window, an
 
 - The application starts from both the IDE and a plain Maven command
 - The window resizes without errors or a distorted viewport
+- Dragging an edge or corner to resize keeps redrawing throughout the drag — no black or stale frame that only clears on mouse\-release
 - Escape and the window's close button both exit cleanly with no leaked native handles
 - A run produces a log file under `logs/` containing the startup banner and any GLFW/OpenGL diagnostics
 

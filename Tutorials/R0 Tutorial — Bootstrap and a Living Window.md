@@ -73,7 +73,7 @@ Maven needs to know three things: which LWJGL modules to put on the classpath, w
 </project>
 ```
 
-Then create `src/main/resources/tinylog.properties` — tinylog reads this at startup with no code required:
+Then create `../src/main/resources/tinylog.properties` — tinylog reads this at startup with no code required:
 
 ```properties
 writer1                 = console
@@ -130,6 +130,7 @@ import static org.lwjgl.system.MemoryUtil.*;
 public class Main {
 
     private long window;
+    private Callback debugCallback;
 
     public void run() {
         Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
@@ -156,7 +157,7 @@ public class Main {
 
 ### Why it's built this way
 
-`window` is a `long` because GLFW is a C library — LWJGL exposes native window objects as raw handles (memory addresses), not Java objects. This is a pattern you'll see throughout LWJGL: anything backed by native state is an opaque `long` handle you pass back into GLFW/OpenGL functions, never an object you can inspect from the Java side. Separating `init()` from `loop()` from the start also gives you a natural place to put R1's update/render split later — you are not fighting a monolithic `main()` method by then. The startup line uses `Logger.info` with a `{}` placeholder rather than string concatenation — tinylog only builds the final string if the info level is actually enabled for this run, and it's the same call style you'll use everywhere else from now on, so nothing later needs to be retrofitted off `System.out`.
+`window` is a `long` because GLFW is a C library — LWJGL exposes native window objects as raw handles (memory addresses), not Java objects. This is a pattern you'll see throughout LWJGL: anything backed by native state is an opaque `long` handle you pass back into GLFW/OpenGL functions, never an object you can inspect from the Java side. `debugCallback` is declared here, as a field, rather than as a local variable inside whichever step creates it (Step 12) — it's needed again in Step 15's cleanup, in a different method, after `loop()` has already returned, so it has to outlive the method that creates it. Separating `init()` from `loop()` from the start also gives you a natural place to put R1's update/render split later — you are not fighting a monolithic `main()` method by then. The startup line uses `Logger.info` with a `{}` placeholder rather than string concatenation — tinylog only builds the final string if the info level is actually enabled for this run, and it's the same call style you'll use everywhere else from now on, so nothing later needs to be retrofitted off `System.out`.
 
 ### What happens if you skip it
 
@@ -352,17 +353,16 @@ Every OpenGL function call — `glClear`, `glViewport`, everything — throws an
 Right after creating capabilities, only in development builds:
 
 ```java
-Callback debugCallback = null;
 if (debugBuild) {
     debugCallback = GLUtil.setupDebugMessageCallback(System.err);
 }
 ```
 
-(Keep a reference to `debugCallback` — you'll free it in Step 15.)
+`debugCallback` is the field you declared in Step 2 — assign to it here rather than declaring a new local variable, or Step 15 won't have anything to free.
 
 ### Why
 
-Historically, OpenGL error checking meant manually calling `glGetError()` after every single call and decoding a bare integer — tedious enough that most tutorials skip it, and most bugs go undiagnosed as a result. `GLUtil.setupDebugMessageCallback` uses the `KHR_debug` extension (available because of the context hint from Step 5) to have the driver *push* human\-readable messages to you automatically — for performance warnings, deprecated\-behavior notices, and genuine errors alike — with no per\-call overhead in your own code. This is exactly R0's "OpenGL debug context/callback in development builds" requirement, and it will save you significant time from R2 onward, once shaders and buffers are in the picture.
+Historically, OpenGL error checking meant manually calling `glGetError()` after every single call and decoding a bare integer — tedious enough that most tutorials skip it, and most bugs go undiagnosed as a result. `GLUtil.setupDebugMessageCallback` uses the `KHR_debug` extension (available because of the context hint from Step 5) to have the driver *push* human\-readable messages to you automatically — for performance warnings, deprecated\-behavior notices, and genuine errors alike — with no per\-call overhead in your own code. This is exactly R0's "OpenGL debug context/callback in development builds" requirement, and it will save you significant time from R2 onward, once shaders and buffers are in the picture. It's the one place in R0 that still writes straight to `System.err` rather than through tinylog — `GLUtil.setupDebugMessageCallback` only accepts a `PrintStream`, and driver debug spam is the kind of firehose you normally want to watch live rather than have filling up your log file. Routing it through tinylog too is a small, legitimate follow\-up (a `PrintStream` that forwards each line to `Logger.debug(...)`) if you'd rather have it captured; it's left out of R0 to keep this step to the one thing it's teaching.
 
 ### What happens if you skip it
 
@@ -391,35 +391,44 @@ If you never call `glfwShowWindow`, the window stays hidden forever — the appl
 ### What we're doing
 
 ```java
+private long frameCount = 0;
+
 private void loop() {
     GL.createCapabilities();
     if (debugBuild) {
-        GLUtil.setupDebugMessageCallback(System.err);
+        debugCallback = GLUtil.setupDebugMessageCallback(System.err);
     }
 
     glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
+    glfwSetWindowRefreshCallback(window, win -> render());
 
-    long frameCount = 0;
     while (!glfwWindowShouldClose(window)) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glfwSwapBuffers(window);
+        render();
         glfwPollEvents();
-
         frameCount++;
     }
+}
+
+private void render() {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glfwSwapBuffers(window);
 }
 ```
 
 ### Why
 
-This is GLFW's standard loop shape, and it matters that the two calls happen in this order for a reason: `glfwSwapBuffers` presents the frame we just drew by swapping the front and back buffers (we render into a hidden "back" buffer so the user never sees a half\-drawn frame), and `glfwPollEvents` processes the OS event queue — mouse, keyboard, window messages — dispatching to whichever callbacks you registered in Steps 7 and 8. Skipping `glfwPollEvents` for even a few seconds makes the OS consider the application unresponsive. `frameCount` is here only so this loop satisfies R0's "frame/update counters for diagnostics" requirement — R1 replaces this with real fixed\-step update/render accounting.
+This is GLFW's standard loop shape, and it matters that the two calls happen in this order for a reason: `glfwSwapBuffers` presents the frame we just drew by swapping the front and back buffers (we render into a hidden "back" buffer so the user never sees a half\-drawn frame), and `glfwPollEvents` processes the OS event queue — mouse, keyboard, window messages — dispatching to whichever callbacks you registered in Steps 7 and 8. Skipping `glfwPollEvents` for even a few seconds makes the OS consider the application unresponsive.
+
+The clear\-and\-swap logic is pulled out into its own `render()` method, called from two places, and this is the part worth understanding rather than just copying: on Windows (and, after being uncovered, on other platforms too), dragging an edge or corner to resize the window puts the OS into a modal loop for the duration of the drag. `glfwPollEvents()` does not return until you release the mouse, so the `while` loop's body — including `render()` — simply stops running mid\-drag. The newly exposed pixels were never cleared or drawn to, so they show up black until you let go and the loop resumes. `glfwSetWindowRefreshCallback` exists specifically to close this gap: GLFW still calls it during that modal loop, even though the outer `glfwPollEvents()` call is blocked, so registering it to call the same `render()` keeps the window redrawing continuously through the entire drag instead of only after it ends. It's registered once, here, rather than in Step 8 alongside the framebuffer\-size callback, because it needs `render()` — and by extension a current OpenGL context and capabilities — which don't exist until `loop()` starts.
+
+`frameCount` is here only so this loop satisfies R0's "frame/update counters for diagnostics" requirement — R1 replaces this with real fixed\-step update/render accounting.
 
 ### What happens if you skip a piece
 
 - Skip `glfwPollEvents()` → the window immediately becomes unresponsive: no input is processed, the OS shows "Not Responding," and the close button stops working (though Alt\+F4/force\-quit still works at the OS level).
 - Skip `glfwSwapBuffers()` → you never see anything you draw; the back buffer fills correctly but is never presented to the screen.
 - Skip the `glClear` call → once real rendering starts (R2\+), each frame draws on top of the previous one instead of a clean slate — a classic smearing/trailing artifact.
+- Skip `glfwSetWindowRefreshCallback` → nothing crashes, but dragging a window edge to resize shows a black (or stale) frame for the duration of the drag, snapping back to correct only on mouse\-release. Purely cosmetic, but exactly the kind of rough edge R0 exists to sand down before six more releases build on top of this window.
 
 ## Step 15 — Cleanup
 
@@ -462,7 +471,7 @@ From the project root:
 mvn compile exec:java -Dexec.mainClass="forestsettlement.Main"
 ```
 
-(Add the `exec-maven-plugin` to your `pom.xml` if `exec:java` isn't recognized — or simply run `Main.main()` from your IDE, which needs no extra plugin.)
+(Add the `exec-maven-plugin` to your `../pom.xml` if `exec:java` isn't recognized — or simply run `Main.main()` from your IDE, which needs no extra plugin.)
 
 **On macOS specifically**, GLFW requires windowing calls on the JVM's first thread. Add this JVM argument or the app will crash on launch with a message about `NSWindow` / main thread:
 
@@ -495,7 +504,9 @@ Before calling R0 done, check each one explicitly:
 
 **Nothing printed by the debug callback even when you'd expect a warning.** Confirm `GLFW_OPENGL_DEBUG_CONTEXT` was set *before* `glfwCreateWindow` (Step 5) — it cannot be applied after the context exists.
 
-**No `logs/` folder, or it's empty, even though the console shows output.** `tinylog-impl` is missing from `pom.xml` (only `tinylog-api` is present), or `tinylog.properties` isn't on the classpath — see Step 1's "What happens if you skip or misconfigure this".
+**No `logs/` folder, or it's empty, even though the console shows output.** `tinylog-impl` is missing from `../pom.xml` (only `tinylog-api` is present), or `tinylog.properties` isn't on the classpath — see Step 1's "What happens if you skip or misconfigure this".
+
+**Window content goes black (or shows a stale frame) while dragging an edge to resize, and only redraws once you release the mouse.** Missing `glfwSetWindowRefreshCallback` — see Step 14. This is a Windows\-modal\-resize\-loop artifact, not a driver or viewport bug; if `glViewport` is also wrong afterward (a stretched or offset image once you're actually rendering something from R2 on), that's a separate issue — check Step 8's framebuffer\-size callback instead.
 
 ## What's next
 

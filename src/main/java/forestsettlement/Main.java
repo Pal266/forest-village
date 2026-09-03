@@ -22,7 +22,9 @@ public class Main {
 
     public long window;
 
-    Callback debugCallback = null;
+    private Callback debugCallback = null;
+
+    private long frameCount = 0;
 
     private void run() {
         init();
@@ -99,16 +101,19 @@ public class Main {
         }
 
         glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
+        glfwSetWindowRefreshCallback(window, win -> render());
 
-        long frameCount = 0;
         while (!glfwWindowShouldClose(window)) {
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-            glfwSwapBuffers(window);
+            render();
             glfwPollEvents();
 
             frameCount++;
         }
+    }
+
+    private void render() {
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glfwSwapBuffers(window);
     }
 
     public static void main(String[] args) {
