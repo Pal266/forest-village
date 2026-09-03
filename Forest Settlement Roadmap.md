@@ -6,7 +6,7 @@ Java 21 \+ LWJGL 3
 
 A release\-oriented technical specification for building a 3D medieval settlement and life\-simulation game in the spirit of *Manor Lords* and *Life is Feudal: Forest Village*. The roadmap grows the game and its supporting engine together, release by release, rather than building a generic engine up front.
 
-Baseline: Java 21 · Maven · LWJGL 3.4.3 · GLFW · OpenGL 3.3 core · GLSL · JOML 1.10.9
+Baseline: Java 21 · Maven · LWJGL 3.4.3 · GLFW · OpenGL 3.3 core · GLSL · JOML 1.10.9 · tinylog 2.7.0\\n
 
 Prepared: 29 August 2026
 
@@ -104,6 +104,7 @@ Goal. Stand up the smallest reliable Java/LWJGL application: a native window, an
 - Make the OpenGL context current and create LWJGL's `GLCapabilities`
 - V\-sync configuration and a framebuffer\-resize callback
 - An OpenGL debug context/callback enabled in development builds
+- Structured logging via tinylog, writing to both the console and a rolling log file — no raw `System.out`/`System.err` in application code, and GLFW's own error callback routes through it too
 - Deterministic cleanup of callbacks, the window handle and GLFW itself on exit
 
 ### Acceptance criteria
@@ -111,6 +112,7 @@ Goal. Stand up the smallest reliable Java/LWJGL application: a native window, an
 - The application starts from both the IDE and a plain Maven command
 - The window resizes without errors or a distorted viewport
 - Escape and the window's close button both exit cleanly with no leaked native handles
+- A run produces a log file under `logs/` containing the startup banner and any GLFW/OpenGL diagnostics
 
 ### Explicitly out of scope
 

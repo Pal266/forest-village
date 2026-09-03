@@ -4,7 +4,7 @@ A line\-by\-line tutorial: what each step does, why it exists, and what breaks i
 
 ## What R0 actually builds
 
-By the end of this tutorial you'll have a Java 21 \+ Maven project that opens a native, resizable window with a working OpenGL context, and shuts down without leaking anything. Nothing is drawn yet — that's R2. R0's entire job is to get the *lifecycle* right: init → run → cleanup, done deterministically, with diagnostics you can trust. Every later release stacks on top of this window, so mistakes here (a leaked callback, a context created on the wrong thread, a swallowed error) tend to resurface much later as confusing, hard\-to\-trace bugs. It's worth doing carefully once.
+By the end of this tutorial you'll have a Java 21 \+ Maven project that opens a native, resizable window with a working OpenGL context, and shuts down without leaking anything. Nothing is drawn yet — that's R2. R0's entire job is to get the *lifecycle* right: init → run → cleanup, done deterministically, with diagnostics you can trust — including a small tinylog\-based logging setup that writes to both the console and a rolling log file, so a failure is still readable after you've closed the window. Every later release stacks on top of this window, so mistakes here (a leaked callback, a context created on the wrong thread, a swallowed error) tend to resurface much later as confusing, hard\-to\-trace bugs. It's worth doing carefully once.
 
 We'll build the file incrementally, explaining each piece, then show the complete listing at the end.
 
@@ -20,7 +20,7 @@ If you're on **macOS**, keep one fact in mind for later: Cocoa (the OS windowing
 
 ### What we're doing
 
-Maven needs to know two things: which LWJGL modules to put on the classpath, and which *native* binaries (the actual C libraries GLFW/OpenGL bindings call into) to bundle for your OS and CPU architecture. LWJGL ships native code per\-platform, so the dependency list is slightly longer than a typical pure\-Java library.
+Maven needs to know three things: which LWJGL modules to put on the classpath, which *native* binaries (the actual C libraries GLFW/OpenGL bindings call into) to bundle for your OS and CPU architecture, and which logging library to pull in so we're never reduced to `System.out.println` for diagnostics. LWJGL ships native code per\-platform, so the dependency list is slightly longer than a typical pure\-Java library; logging adds just two small, dependency\-free jars.
 
 ```xml
 <project xmlns="http://maven.apache.org/POM/4.0.0">
@@ -34,6 +34,7 @@ Maven needs to know two things: which LWJGL modules to put on the classpath, and
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <lwjgl.version>3.4.3</lwjgl.version>
+    <tinylog.version>2.7.0</tinylog.version>
 
     <!-- Set this to match your machine. One of:
          natives-windows, natives-windows-x86, natives-windows-arm64,
@@ -64,20 +65,44 @@ Maven needs to know two things: which LWJGL modules to put on the classpath, and
     <dependency><groupId>org.lwjgl</groupId><artifactId>lwjgl</artifactId><classifier>${lwjgl.natives}</classifier></dependency>
     <dependency><groupId>org.lwjgl</groupId><artifactId>lwjgl-glfw</artifactId><classifier>${lwjgl.natives}</classifier></dependency>
     <dependency><groupId>org.lwjgl</groupId><artifactId>lwjgl-opengl</artifactId><classifier>${lwjgl.natives}</classifier></dependency>
+
+    <!-- Logging: tinylog -->
+    <dependency><groupId>org.tinylog</groupId><artifactId>tinylog-api</artifactId><version>${tinylog.version}</version></dependency>
+    <dependency><groupId>org.tinylog</groupId><artifactId>tinylog-impl</artifactId><version>${tinylog.version}</version></dependency>
   </dependencies>
 </project>
 ```
+
+Then create `src/main/resources/tinylog.properties` — tinylog reads this at startup with no code required:
+
+```properties
+writer1                 = console
+writer1.level            = info
+writer1.format           = {date: HH:mm:ss.SSS} {level}: {message}
+
+writer2                  = rolling file
+writer2.level             = debug
+writer2.file              = logs/forest-settlement_{date:yyyy-MM-dd_HH-mm-ss}.log
+writer2.policies          = startup
+writer2.format            = {date: yyyy-MM-dd HH:mm:ss.SSS} [{thread}] {level}: {class}.{method}() - {message}
+```
+
+This gives you two independent outputs from the same log calls: a short, human\-readable line on the console while you're developing, and a fuller, timestamped, per\-run file under `logs/` for anything you need to look back at — including runs that happened when you weren't watching the console at all.
 
 ### Why it's built this way
 
 The `lwjgl-bom` import pins every LWJGL artifact to the same version, so you never end up with `lwjgl-glfw` and `lwjgl-opengl` silently drifting to different releases — a real source of native\-crash bugs in larger projects. Splitting each module into a plain jar plus a classified `natives-*` jar is how LWJGL ships pre\-compiled native libraries for six\-plus platforms without forcing every developer to download all of them.
 
-If you'll eventually build for multiple operating systems, don't hand\-maintain this list — generate it from the official [LWJGL customizer](https://www.lwjgl.org/customize), which produces a correct Maven or Gradle block for whichever modules and platforms you select.
+tinylog is split the same conceptual way LWJGL and SLF4J are: `tinylog-api` is the small, stable set of `Logger.info(...)`/`Logger.error(...)` calls your code makes, and `tinylog-impl` is the backend that actually writes output. That split isn't decorative here — point 3 in "What happens if you skip or misconfigure this" is a real failure mode, not a hypothetical. tinylog was chosen over SLF4J\+Logback and Log4j2 specifically for R0: it's the fastest of the three in its own published benchmarks (especially when logging is disabled at a given level — the check compiles down to a cached boolean, not a method call), it ships as two small, dependency\-free jars instead of pulling in a facade plus a separate backend plus (for Log4j2's async mode) the LMAX Disruptor, and `writer = rolling file` with a `{date}`–stamped filename gets you a separate log file per run with zero custom code — no `RollingFileAppender` XML, no manual file\-naming logic. Log4j2's async loggers have higher peak throughput, but that's a real\-time\-server\-under\-load feature, not something a single\-player game's window bootstrap needs, and it comes with its own footguns (error handling on the async thread, mutable log messages) that aren't worth taking on this early.
+
+If you'll eventually build for multiple operating systems, don't hand\-maintain the LWJGL dependency list — generate it from the official [LWJGL customizer](https://www.lwjgl.org/customize), which produces a correct Maven or Gradle block for whichever modules and platforms you select.
 
 ### What happens if you skip or misconfigure this
 
 - **Wrong or missing `natives-*` classifier** → the app compiles fine, then throws `UnsatisfiedLinkError` the moment GLFW tries to load its native library at runtime. This is the single most common "it worked on the tutorial but not for me" issue, and it's always a natives mismatch.
 - **No BOM, mismatched versions by hand** → usually still works today, but is a landmine: a future `mvn versions:use-latest-releases` or a copy\-pasted dependency block from an old tutorial can quietly desync the modules, producing native crashes that look nothing like a version problem.
+- **`tinylog-api` without `tinylog-impl`** → the app compiles and runs fine, but every `Logger.info(...)`/`Logger.error(...)` call silently does nothing — no console output, no file, no error. This is the logging equivalent of the natives mismatch above: it's not a crash, it's a slow\-motion "why do I have no logs at all" bug the first time you actually need one.
+- **No `tinylog.properties` on the classpath** → tinylog falls back to its own built\-in defaults (console only, no file), so the app still runs but you silently lose the per\-run log file this step exists to give you.
 
 ## Step 2 — Main.java: the application's shape
 
@@ -92,6 +117,7 @@ import org.lwjgl.Version;
 import org.lwjgl.glfw.*;
 import org.lwjgl.opengl.*;
 import org.lwjgl.system.*;
+import org.tinylog.Logger;
 
 import java.nio.IntBuffer;
 
@@ -106,7 +132,7 @@ public class Main {
     private long window;
 
     public void run() {
-        System.out.println("Forest Settlement — LWJGL " + Version.getVersion());
+        Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
 
         init();
         loop();
@@ -130,11 +156,11 @@ public class Main {
 
 ### Why it's built this way
 
-`window` is a `long` because GLFW is a C library — LWJGL exposes native window objects as raw handles (memory addresses), not Java objects. This is a pattern you'll see throughout LWJGL: anything backed by native state is an opaque `long` handle you pass back into GLFW/OpenGL functions, never an object you can inspect from the Java side. Separating `init()` from `loop()` from the start also gives you a natural place to put R1's update/render split later — you are not fighting a monolithic `main()` method by then.
+`window` is a `long` because GLFW is a C library — LWJGL exposes native window objects as raw handles (memory addresses), not Java objects. This is a pattern you'll see throughout LWJGL: anything backed by native state is an opaque `long` handle you pass back into GLFW/OpenGL functions, never an object you can inspect from the Java side. Separating `init()` from `loop()` from the start also gives you a natural place to put R1's update/render split later — you are not fighting a monolithic `main()` method by then. The startup line uses `Logger.info` with a `{}` placeholder rather than string concatenation — tinylog only builds the final string if the info level is actually enabled for this run, and it's the same call style you'll use everywhere else from now on, so nothing later needs to be retrofitted off `System.out`.
 
 ### What happens if you skip it
 
-Nothing breaks immediately — you could write everything inline in `main()`. But every subsequent release adds more setup (asset loading in R11, UI init in R32, and so on), and an unstructured `main()` becomes a genuine liability within a few releases. This costs nothing to do right now and saves real pain later.
+Nothing breaks immediately — you could write everything inline in `main()`, and you could keep using `System.out.println` instead of `Logger.info`. But every subsequent release adds more setup (asset loading in R11, UI init in R32, and so on) and more places that need diagnostics, and an unstructured `main()` mixed with raw console prints becomes a genuine liability within a few releases — no timestamps, no log levels, no file you can look back at after the console is gone. This costs nothing to do right now and saves real pain later.
 
 ## Step 3 — The GLFW error callback
 
@@ -143,16 +169,18 @@ Nothing breaks immediately — you could write everything inline in `main()`. Bu
 Add this as the very first line of `init()`\:
 
 ```java
-GLFWErrorCallback.createPrint(System.err).set();
+GLFWErrorCallback.create((error, description) ->
+    Logger.error("GLFW error {}: {}", error, GLFWErrorCallback.getDescription(description))
+).set();
 ```
 
 ### Why
 
-GLFW is a C library; it can't throw a Java exception when something goes wrong internally. Instead, it reports errors through a callback function you register. `createPrint` gives you a ready\-made callback that formats and prints GLFW's error code and description to a stream you choose.
+GLFW is a C library; it can't throw a Java exception when something goes wrong internally. Instead, it reports errors through a callback function you register. LWJGL's `GLFWErrorCallback.createPrint(PrintStream)` is the usual quickstart version of this — it formats and prints GLFW's error code and description straight to a stream like `System.err`. We use the slightly longer `create(...)` form instead so the same error goes through `Logger.error(...)`\: it lands in the console *and* in the rolling log file from Step 1, with a timestamp and the `ERROR` level, right alongside every other diagnostic the app produces — not on a separate, unlogged channel that disappears the moment you close the console window.
 
 ### What happens if you skip it
 
-GLFW failures — an unsupported window hint combination, a monitor query that fails, a context creation error — happen *silently*. You'll see confusing downstream symptoms (a `NULL` window handle, a black screen, an exception three calls later with no obvious cause) with no indication of what GLFW itself actually complained about. Setting this callback first is cheap insurance that pays for itself the first time something goes wrong.
+GLFW failures — an unsupported window hint combination, a monitor query that fails, a context creation error — happen *silently*. You'll see confusing downstream symptoms (a `NULL` window handle, a black screen, an exception three calls later with no obvious cause) with no indication of what GLFW itself actually complained about, and nothing in your log file to look back on afterward. Setting this callback first is cheap insurance that pays for itself the first time something goes wrong — and routing it through the same logger as everything else means that insurance is still readable after the fact, not just visible in a console you happened to be watching at the time.
 
 ## Step 4 — Initializing GLFW
 
@@ -401,7 +429,7 @@ Back in `run()`, after `loop()` returns:
 
 ```java
 public void run() {
-    System.out.println("Forest Settlement — LWJGL " + Version.getVersion());
+    Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
 
     init();
     loop();
@@ -420,7 +448,7 @@ public void run() {
 
 ### Why
 
-Everything created in this tutorial lives outside the JVM's garbage\-collected heap: the window, its OpenGL context, every callback, GLFW's own internal state, and the debug callback are all native resources. The JVM garbage collector doesn't know about them and can't clean them up — leaving them means leaked native memory and, for callbacks specifically, dangling function pointers that can crash the process if native code ever calls into freed Java\-side memory. `glfwFreeCallbacks` releases every callback registered on this window in one call (key callback, framebuffer\-size callback, and any others), `glfwDestroyWindow` releases the window and its context, `glfwTerminate` releases everything GLFW itself allocated in Step 4, and finally we free the error callback we set in Step 3 — deliberately last, so that if anything in the preceding cleanup calls fails, we still get an error message about it.
+Everything created in this tutorial lives outside the JVM's garbage\-collected heap: the window, its OpenGL context, every callback, GLFW's own internal state, and the debug callback are all native resources. The JVM garbage collector doesn't know about them and can't clean them up — leaving them means leaked native memory and, for callbacks specifically, dangling function pointers that can crash the process if native code ever calls into freed Java\-side memory. `glfwFreeCallbacks` releases every callback registered on this window in one call (key callback, framebuffer\-size callback, and any others), `glfwDestroyWindow` releases the window and its context, `glfwTerminate` releases everything GLFW itself allocated in Step 4, and finally we free the error callback we set in Step 3 — the tinylog\-routing one — deliberately last, so that if anything in the preceding cleanup calls fails, we still get an error message about it, logged the same way as everything else.
 
 ### What happens if you skip it
 
@@ -444,6 +472,8 @@ mvn compile exec:java -Dexec.mainClass="forestsettlement.Main"
 
 In an IDE, add it to the run configuration's VM options. From the command line: `java -XstartOnFirstThread -cp ... forestsettlement.Main`. This has no effect on Windows or Linux — it's safe to always include it in your run configuration if you want one setup that works across platforms.
 
+Each run also creates a new file under `logs/` (per the `tinylog.properties` from Step 1), named after the run's start time. Check it after the first successful run — it should contain the startup banner from Step 2 at minimum, which is a quick way to confirm logging is wired up correctly before you need it for something that actually went wrong.
+
 ## Verifying against R0's acceptance criteria
 
 Before calling R0 done, check each one explicitly:
@@ -464,6 +494,8 @@ Before calling R0 done, check each one explicitly:
 **Instant crash on launch, macOS only.** Missing `-XstartOnFirstThread` — see "Running it" above.
 
 **Nothing printed by the debug callback even when you'd expect a warning.** Confirm `GLFW_OPENGL_DEBUG_CONTEXT` was set *before* `glfwCreateWindow` (Step 5) — it cannot be applied after the context exists.
+
+**No `logs/` folder, or it's empty, even though the console shows output.** `tinylog-impl` is missing from `pom.xml` (only `tinylog-api` is present), or `tinylog.properties` isn't on the classpath — see Step 1's "What happens if you skip or misconfigure this".
 
 ## What's next
 
