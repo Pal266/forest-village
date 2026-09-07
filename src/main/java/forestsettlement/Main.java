@@ -1,11 +1,11 @@
 package forestsettlement;
 
 import forestsettlement.properties.SystemProperties;
+import forestsettlement.time.FixedTimestep;
 import org.lwjgl.Version;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
-import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.opengl.GLUtil;
 import org.lwjgl.system.Callback;
 import org.lwjgl.system.MemoryStack;
@@ -26,6 +26,8 @@ public class Main {
     private Callback debugCallback = null;
 
     private long frameCount = 0;
+
+    private final FixedTimestep clock = new FixedTimestep();
 
     private void run() {
         Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
@@ -71,6 +73,11 @@ public class Main {
             if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
                 glfwSetWindowShouldClose(win, true);
             }
+
+            if (key == GLFW_KEY_SPACE && action == GLFW_RELEASE) {
+                clock.setPaused(!clock.isPaused());
+                Logger.info("Simulation {}", clock.isPaused() ? "paused" : "resumed");
+            }
         });
 
         glfwSetFramebufferSizeCallback(window, (win, width, height) -> {
@@ -106,17 +113,46 @@ public class Main {
         glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
         glfwSetWindowRefreshCallback(window, win -> render());
 
+        double previousTime = glfwGetTime();
+        double diagnosticsTimer = 0.0;
+        long framesThisSecond = 0;
+        long updatesThisSecond = 0;
+
         while (!glfwWindowShouldClose(window)) {
+            double currentTime = glfwGetTime();
+            double frameTime = currentTime - previousTime;
+            previousTime = currentTime;
+
+            int steps = clock.advance(frameTime);
+            for (int i = 0; i < steps; i++) {
+                update(clock.stepSeconds());
+                updatesThisSecond++;
+            }
+
             render();
             glfwPollEvents();
 
             frameCount++;
+            framesThisSecond++;
+
+            diagnosticsTimer += frameTime;
+            if (diagnosticsTimer >= 1.0) {
+                Logger.debug("{} FPS, {} UPS, paused={}", framesThisSecond, updatesThisSecond, clock.isPaused());
+                diagnosticsTimer = 0.0;
+                framesThisSecond = 0;
+                updatesThisSecond = 0;
+            }
         }
     }
 
     private void render() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glfwSwapBuffers(window);
+    }
+
+    private void update(double dt) {
+        // Nothing to simulate yet — R1 only builds the seam.
+        // R16 onward hooks real simulation systems in here.
     }
 
     public static void main(String[] args) {

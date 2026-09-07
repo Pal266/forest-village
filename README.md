@@ -1,0 +1,1 @@
+Run the application using `mvn compile exec:java -Dexec.mainClass=forestsettlement.Main` command
