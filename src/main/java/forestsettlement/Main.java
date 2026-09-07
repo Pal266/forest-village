@@ -1,6 +1,7 @@
 package forestsettlement;
 
 import forestsettlement.properties.SystemProperties;
+import forestsettlement.render.Shader;
 import forestsettlement.time.FixedTimestep;
 import org.lwjgl.Version;
 import org.lwjgl.glfw.GLFWErrorCallback;
@@ -16,6 +17,10 @@ import java.nio.IntBuffer;
 import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.glEnableVertexAttribArray;
+import static org.lwjgl.opengl.GL20.glVertexAttribPointer;
+import static org.lwjgl.opengl.GL30.*;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
@@ -29,11 +34,19 @@ public class Main {
 
     private final FixedTimestep clock = new FixedTimestep();
 
+    private Shader shader;
+    private int triangleVao;
+    private int triangleVbo;
+
     private void run() {
         Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
 
         init();
         loop();
+
+        glDeleteBuffers(triangleVbo);
+        glDeleteVertexArrays(triangleVao);
+        shader.destroy();
 
         if (debugCallback != null) {
             debugCallback.free();
@@ -106,6 +119,31 @@ public class Main {
     private void loop() {
         GL.createCapabilities();
 
+        shader = new Shader("/shaders/basic.vert", "/shaders/basic.frag");
+
+        float[] vertices = {
+                // x,     y,    z,    r,  g,  b
+                0.0f,  0.5f, 0.0f,  1f, 0f, 0f,
+                -0.5f, -0.5f, 0.0f,  0f, 1f, 0f,
+                0.5f, -0.5f, 0.0f,  0f, 0f, 1f,
+        };
+
+        triangleVao = glGenVertexArrays();
+        glBindVertexArray(triangleVao);
+
+        triangleVbo = glGenBuffers();
+        glBindBuffer(GL_ARRAY_BUFFER, triangleVbo);
+        glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW);
+
+        int stride = 6 * Float.BYTES;
+        glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
+        glEnableVertexAttribArray(0);
+
+        glVertexAttribPointer(1, 3, GL_FLOAT, false, stride, 3L * Float.BYTES);
+        glEnableVertexAttribArray(1);
+
+        glBindVertexArray(0);
+
         if (SystemProperties.DEBUG_MODE) {
             debugCallback = GLUtil.setupDebugMessageCallback(System.err);
         }
@@ -147,6 +185,12 @@ public class Main {
 
     private void render() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        shader.use();
+        glBindVertexArray(triangleVao);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glBindVertexArray(0);
+
         glfwSwapBuffers(window);
     }
 
