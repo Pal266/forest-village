@@ -1,9 +1,12 @@
 package forestsettlement.render;
 
+import org.joml.Matrix4f;
+import org.lwjgl.system.MemoryStack;
 import org.tinylog.Logger;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 
 import static org.lwjgl.opengl.GL20.*;
@@ -28,6 +31,15 @@ public class Shader {
 
     public void destroy() {
         glDeleteProgram(programId);
+    }
+
+    public void setUniformMat4(String name, Matrix4f matrix) {
+        int location = glGetUniformLocation(programId, name);
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            FloatBuffer buffer = stack.mallocFloat(16);
+            matrix.get(buffer);
+            glUniformMatrix4fv(location, false, buffer);
+        }
     }
 
     private static String loadSource(String resourcePath) {

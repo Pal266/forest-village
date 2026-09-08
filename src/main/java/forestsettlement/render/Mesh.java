@@ -19,10 +19,10 @@ public class Mesh {
     public static Mesh quad() {
         float[] vertices = {
                 // x,     y,     z,    r,  g,  b
-                -0.8f, -0.3f, 0.0f,  1f, 0f, 0f,
-                -0.2f, -0.3f, 0.0f,  0f, 1f, 0f,
-                -0.2f,  0.3f, 0.0f,  0f, 0f, 1f,
-                -0.8f,  0.3f, 0.0f,  1f, 1f, 0f,
+                -0.3f, -0.3f, 0.0f,  1f, 0f, 0f,
+                0.3f, -0.3f, 0.0f,  0f, 1f, 0f,
+                0.3f,  0.3f, 0.0f,  0f, 0f, 1f,
+                -0.3f,  0.3f, 0.0f,  1f, 1f, 0f,
         };
 
         int[] indices = {
@@ -35,36 +35,36 @@ public class Mesh {
 
     public static Mesh cube() {
         float[] vertices = {
-                // Front (red)      x     y     z    r   g   b
-                0.2f, -0.3f,  0.3f, 1f, 0f, 0f,
-                0.8f, -0.3f,  0.3f, 1f, 0f, 0f,
-                0.8f,  0.3f,  0.3f, 1f, 0f, 0f,
-                0.2f,  0.3f,  0.3f, 1f, 0f, 0f,
+                // Front (red)       x      y      z    r   g   b
+                -0.3f, -0.3f,  0.3f, 1f, 0f, 0f,
+                0.3f, -0.3f,  0.3f, 1f, 0f, 0f,
+                0.3f,  0.3f,  0.3f, 1f, 0f, 0f,
+                -0.3f,  0.3f,  0.3f, 1f, 0f, 0f,
                 // Back (green)
-                0.8f, -0.3f, -0.3f, 0f, 1f, 0f,
-                0.2f, -0.3f, -0.3f, 0f, 1f, 0f,
-                0.2f,  0.3f, -0.3f, 0f, 1f, 0f,
-                0.8f,  0.3f, -0.3f, 0f, 1f, 0f,
+                0.3f, -0.3f, -0.3f, 0f, 1f, 0f,
+                -0.3f, -0.3f, -0.3f, 0f, 1f, 0f,
+                -0.3f,  0.3f, -0.3f, 0f, 1f, 0f,
+                0.3f,  0.3f, -0.3f, 0f, 1f, 0f,
                 // Left (blue)
-                0.2f, -0.3f, -0.3f, 0f, 0f, 1f,
-                0.2f, -0.3f,  0.3f, 0f, 0f, 1f,
-                0.2f,  0.3f,  0.3f, 0f, 0f, 1f,
-                0.2f,  0.3f, -0.3f, 0f, 0f, 1f,
+                -0.3f, -0.3f, -0.3f, 0f, 0f, 1f,
+                -0.3f, -0.3f,  0.3f, 0f, 0f, 1f,
+                -0.3f,  0.3f,  0.3f, 0f, 0f, 1f,
+                -0.3f,  0.3f, -0.3f, 0f, 0f, 1f,
                 // Right (yellow)
-                0.8f, -0.3f,  0.3f, 1f, 1f, 0f,
-                0.8f, -0.3f, -0.3f, 1f, 1f, 0f,
-                0.8f,  0.3f, -0.3f, 1f, 1f, 0f,
-                0.8f,  0.3f,  0.3f, 1f, 1f, 0f,
+                0.3f, -0.3f,  0.3f, 1f, 1f, 0f,
+                0.3f, -0.3f, -0.3f, 1f, 1f, 0f,
+                0.3f,  0.3f, -0.3f, 1f, 1f, 0f,
+                0.3f,  0.3f,  0.3f, 1f, 1f, 0f,
                 // Top (cyan)
-                0.2f,  0.3f,  0.3f, 0f, 1f, 1f,
-                0.8f,  0.3f,  0.3f, 0f, 1f, 1f,
-                0.8f,  0.3f, -0.3f, 0f, 1f, 1f,
-                0.2f,  0.3f, -0.3f, 0f, 1f, 1f,
+                -0.3f,  0.3f,  0.3f, 0f, 1f, 1f,
+                0.3f,  0.3f,  0.3f, 0f, 1f, 1f,
+                0.3f,  0.3f, -0.3f, 0f, 1f, 1f,
+                -0.3f,  0.3f, -0.3f, 0f, 1f, 1f,
                 // Bottom (magenta)
-                0.2f, -0.3f, -0.3f, 1f, 0f, 1f,
-                0.8f, -0.3f, -0.3f, 1f, 0f, 1f,
-                0.8f, -0.3f,  0.3f, 1f, 0f, 1f,
-                0.2f, -0.3f,  0.3f, 1f, 0f, 1f,
+                -0.3f, -0.3f, -0.3f, 1f, 0f, 1f,
+                0.3f, -0.3f, -0.3f, 1f, 0f, 1f,
+                0.3f, -0.3f,  0.3f, 1f, 0f, 1f,
+                -0.3f, -0.3f,  0.3f, 1f, 0f, 1f,
         };
 
         int[] indices = new int[36];

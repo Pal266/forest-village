@@ -4,6 +4,8 @@ import forestsettlement.properties.SystemProperties;
 import forestsettlement.render.Mesh;
 import forestsettlement.render.Shader;
 import forestsettlement.time.FixedTimestep;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.lwjgl.Version;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
@@ -27,6 +29,12 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 
 public class Main {
 
+    private static final Vector3f[] CUBE_POSITIONS = {
+            new Vector3f(-1.5f, 0f, -1f),
+            new Vector3f(0.0f, 0f, 0f),
+            new Vector3f(1.5f, 0f, 1f),
+    };
+
     private long window;
 
     private Callback debugCallback = null;
@@ -41,6 +49,16 @@ public class Main {
     private Mesh cubeMesh;
     private boolean cullingEnabled = true;
 
+    private Matrix4f view;
+
+    private Matrix4f projection;
+
+    private float fovDegrees = 60f;
+    private float nearPlane = 0.1f;
+    private float farPlane = 100f;
+
+    private int framebufferWidth = 1280;
+    private int framebufferHeight = 720;
 
     private void run() {
         Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
@@ -104,10 +122,26 @@ public class Main {
                 }
                 Logger.info("Back-face culling {}", cullingEnabled ? "enabled" : "disabled");
             }
+
+            if (key == GLFW_KEY_MINUS && action == GLFW_RELEASE) {
+                farPlane = Math.max(nearPlane + 0.1f, farPlane - 1f);
+                projection = buildProjection(framebufferWidth, framebufferHeight);
+                Logger.info("Far plane now {}", farPlane);
+            }
+
+            if (key == GLFW_KEY_EQUAL && action == GLFW_RELEASE) {
+                farPlane += 1f;
+                projection = buildProjection(framebufferWidth, framebufferHeight);
+                Logger.info("Far plane now {}", farPlane);
+            }
         });
 
         glfwSetFramebufferSizeCallback(window, (win, width, height) -> {
             glViewport(0, 0, width, height);
+
+            framebufferWidth = Math.max(width, 1);
+            framebufferHeight = Math.max(height, 1);
+            projection = buildProjection(framebufferWidth, framebufferHeight);
         });
 
         try (MemoryStack stack = stackPush()) {
@@ -142,6 +176,24 @@ public class Main {
 
         quadMesh = Mesh.quad();
         cubeMesh = Mesh.cube();
+
+        view = new Matrix4f().lookAt(
+                new Vector3f(0f, 3f, 6f),   // eye: where the camera sits
+                new Vector3f(0f, 0f, 0f),   // center: what it's looking at
+                new Vector3f(0f, 1f, 0f)    // up: which way is "up" for the camera
+        );
+
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer pWidth = stack.mallocInt(1);
+            IntBuffer pHeight = stack.mallocInt(1);
+            glfwGetFramebufferSize(window, pWidth, pHeight);
+
+            framebufferWidth = pWidth.get(0);
+            framebufferHeight = pHeight.get(0);
+        }
+
+        projection = buildProjection(framebufferWidth, framebufferHeight);
+
 
         if (SystemProperties.DEBUG_MODE) {
             debugCallback = GLUtil.setupDebugMessageCallback(System.err);
@@ -186,8 +238,25 @@ public class Main {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader.use();
+        shader.setUniformMat4("view", view);
+        shader.setUniformMat4("projection", projection);
+
+        Matrix4f quadModel = new Matrix4f().identity().translate(0f, 1.5f, -2f);
+        shader.setUniformMat4("model", quadModel);
         quadMesh.draw();
-        cubeMesh.draw();
+
+        float angle = (float) glfwGetTime();
+
+        for (Vector3f position : CUBE_POSITIONS) {
+            Matrix4f cubeModel = new Matrix4f()
+                    .identity()
+                    .translate(position)
+                    .rotateY(angle)
+                    .scale(1.5f);
+
+            shader.setUniformMat4("model", cubeModel);
+            cubeMesh.draw();
+        }
 
         glfwSwapBuffers(window);
     }
@@ -195,6 +264,12 @@ public class Main {
     private void update(double dt) {
         // Nothing to simulate yet — R1 only builds the seam.
         // R16 onward hooks real simulation systems in here.
+    }
+
+    private Matrix4f buildProjection(int width, int height) {
+        float aspect = (float) width / (float) height;
+        return new Matrix4f().perspective(
+                (float) Math.toRadians(fovDegrees), aspect, nearPlane, farPlane);
     }
 
     public static void main(String[] args) {
