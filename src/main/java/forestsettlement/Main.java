@@ -1,6 +1,7 @@
 package forestsettlement;
 
 import forestsettlement.properties.SystemProperties;
+import forestsettlement.render.Mesh;
 import forestsettlement.render.Shader;
 import forestsettlement.time.FixedTimestep;
 import org.lwjgl.Version;
@@ -35,8 +36,11 @@ public class Main {
     private final FixedTimestep clock = new FixedTimestep();
 
     private Shader shader;
-    private int triangleVao;
-    private int triangleVbo;
+
+    private Mesh quadMesh;
+    private Mesh cubeMesh;
+    private boolean cullingEnabled = true;
+
 
     private void run() {
         Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
@@ -44,8 +48,8 @@ public class Main {
         init();
         loop();
 
-        glDeleteBuffers(triangleVbo);
-        glDeleteVertexArrays(triangleVao);
+        quadMesh.destroy();
+        cubeMesh.destroy();
         shader.destroy();
 
         if (debugCallback != null) {
@@ -91,6 +95,15 @@ public class Main {
                 clock.setPaused(!clock.isPaused());
                 Logger.info("Simulation {}", clock.isPaused() ? "paused" : "resumed");
             }
+            if (key == GLFW_KEY_F && action == GLFW_RELEASE) {
+                cullingEnabled = !cullingEnabled;
+                if (cullingEnabled) {
+                    glEnable(GL_CULL_FACE);
+                } else {
+                    glDisable(GL_CULL_FACE);
+                }
+                Logger.info("Back-face culling {}", cullingEnabled ? "enabled" : "disabled");
+            }
         });
 
         glfwSetFramebufferSizeCallback(window, (win, width, height) -> {
@@ -119,28 +132,23 @@ public class Main {
     private void loop() {
         GL.createCapabilities();
 
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+        glFrontFace(GL_CCW);
+
+        glEnable(GL_DEPTH_TEST);
+
         shader = new Shader("/shaders/basic.vert", "/shaders/basic.frag");
 
         float[] vertices = {
                 // x,     y,    z,    r,  g,  b
-                0.0f,  0.5f, 0.0f,  1f, 0f, 0f,
-                -0.5f, -0.5f, 0.0f,  0f, 1f, 0f,
-                0.5f, -0.5f, 0.0f,  0f, 0f, 1f,
+                0.0f, 0.5f, 0.0f, 1f, 0f, 0f,
+                -0.5f, -0.5f, 0.0f, 0f, 1f, 0f,
+                0.5f, -0.5f, 0.0f, 0f, 0f, 1f,
         };
 
-        triangleVao = glGenVertexArrays();
-        glBindVertexArray(triangleVao);
-
-        triangleVbo = glGenBuffers();
-        glBindBuffer(GL_ARRAY_BUFFER, triangleVbo);
-        glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW);
-
-        int stride = 6 * Float.BYTES;
-        glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
-        glEnableVertexAttribArray(0);
-
-        glVertexAttribPointer(1, 3, GL_FLOAT, false, stride, 3L * Float.BYTES);
-        glEnableVertexAttribArray(1);
+        quadMesh = Mesh.quad();
+        cubeMesh = Mesh.cube();
 
         glBindVertexArray(0);
 
@@ -187,9 +195,8 @@ public class Main {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader.use();
-        glBindVertexArray(triangleVao);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-        glBindVertexArray(0);
+        quadMesh.draw();
+        cubeMesh.draw();
 
         glfwSwapBuffers(window);
     }
