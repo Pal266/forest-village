@@ -60,7 +60,6 @@ public class Main {
     private int framebufferWidth = 1280;
     private int framebufferHeight = 720;
 
-
     private void run() {
         Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
 

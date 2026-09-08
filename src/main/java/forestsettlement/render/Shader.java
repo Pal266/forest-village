@@ -32,6 +32,7 @@ public class Shader {
     public void destroy() {
         glDeleteProgram(programId);
     }
+
     public void setUniformMat4(String name, Matrix4f matrix) {
         int location = glGetUniformLocation(programId, name);
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -40,7 +41,6 @@ public class Shader {
             glUniformMatrix4fv(location, false, buffer);
         }
     }
-
 
     private static String loadSource(String resourcePath) {
         try (InputStream in = Shader.class.getResourceAsStream(resourcePath)) {
