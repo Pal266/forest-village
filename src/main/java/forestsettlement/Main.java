@@ -140,17 +140,8 @@ public class Main {
 
         shader = new Shader("/shaders/basic.vert", "/shaders/basic.frag");
 
-        float[] vertices = {
-                // x,     y,    z,    r,  g,  b
-                0.0f, 0.5f, 0.0f, 1f, 0f, 0f,
-                -0.5f, -0.5f, 0.0f, 0f, 1f, 0f,
-                0.5f, -0.5f, 0.0f, 0f, 0f, 1f,
-        };
-
         quadMesh = Mesh.quad();
         cubeMesh = Mesh.cube();
-
-        glBindVertexArray(0);
 
         if (SystemProperties.DEBUG_MODE) {
             debugCallback = GLUtil.setupDebugMessageCallback(System.err);
