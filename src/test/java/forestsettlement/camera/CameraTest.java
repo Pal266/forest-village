@@ -58,4 +58,22 @@ class CameraTest {
         assertEquals(0f, camera.target().y, 1e-6);
         assertTrue(camera.target().x != 0f || camera.target().z != 0f);
     }
+
+    @Test
+    void adjustFarPlaneMovesItByTheGivenDelta() {
+        Camera camera = new Camera(new Vector3f(0f, 0f, 0f), 0f, 45f, 10f, 60f, 0.1f, 100f);
+
+        camera.adjustFarPlane(5f);
+
+        assertEquals(105f, camera.farPlane(), 1e-6);
+    }
+
+    @Test
+    void adjustFarPlaneNeverCrossesTheNearPlane() {
+        Camera camera = new Camera(new Vector3f(0f, 0f, 0f), 0f, 45f, 10f, 60f, 0.1f, 100f);
+
+        camera.adjustFarPlane(-500f);
+
+        assertEquals(0.2f, camera.farPlane(), 1e-6);
+    }
 }
