@@ -11,16 +11,35 @@ public class Camera {
     private static final float MIN_DISTANCE = 3f;
     private static final float MAX_DISTANCE = 30f;
 
+    private static final float DEFAULT_FOV_DEGREES = 60f;
+    private static final float DEFAULT_NEAR_PLANE = 0.1f;
+    private static final float DEFAULT_FAR_PLANE = 100f;
+
     private final Vector3f target;
     private float yawDegrees;
     private float pitchDegrees;
     private float distance;
 
+    // The camera owns the projection parameters as well as the view, since
+    // "where the camera is looking from" and "how it sees the world" are the
+    // same concept rather than two unrelated pieces of state.
+    private float fovDegrees;
+    private float nearPlane;
+    private float farPlane;
+
     public Camera(Vector3f target, float yawDegrees, float pitchDegrees, float distance) {
+        this(target, yawDegrees, pitchDegrees, distance, DEFAULT_FOV_DEGREES, DEFAULT_NEAR_PLANE, DEFAULT_FAR_PLANE);
+    }
+
+    public Camera(Vector3f target, float yawDegrees, float pitchDegrees, float distance,
+                  float fovDegrees, float nearPlane, float farPlane) {
         this.target = new Vector3f(target);
         this.yawDegrees = yawDegrees;
         this.pitchDegrees = clampPitch(pitchDegrees);
         this.distance = clampDistance(distance);
+        this.fovDegrees = fovDegrees;
+        this.nearPlane = nearPlane;
+        this.farPlane = farPlane;
     }
 
     public void pan(float rightAmount, float forwardAmount) {
@@ -74,6 +93,36 @@ public class Camera {
 
     public float distance() {
         return distance;
+    }
+
+    public float fovDegrees() {
+        return fovDegrees;
+    }
+
+    public float nearPlane() {
+        return nearPlane;
+    }
+
+    public float farPlane() {
+        return farPlane;
+    }
+
+    /**
+     * Builds the perspective projection matrix for the given framebuffer size,
+     * using this camera's field of view and clip planes.
+     */
+    public Matrix4f projectionMatrix(int framebufferWidth, int framebufferHeight) {
+        float aspect = (float) framebufferWidth / (float) framebufferHeight;
+        return new Matrix4f().perspective(
+                (float) Math.toRadians(fovDegrees), aspect, nearPlane, farPlane);
+    }
+
+    /**
+     * Moves the far clip plane by the given amount, never letting it cross the
+     * near plane.
+     */
+    public void adjustFarPlane(float delta) {
+        farPlane = Math.max(nearPlane + 0.1f, farPlane + delta);
     }
 
     private static float clampPitch(float pitchDegrees) {
