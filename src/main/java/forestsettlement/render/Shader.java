@@ -8,21 +8,28 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.lwjgl.opengl.GL20.*;
 
 public class Shader {
 
     private final int programId;
+    private final Map<String, Integer> uniformLocationCache = new HashMap<>();
 
     public Shader(String vertexResourcePath, String fragmentResourcePath) {
         int vertexShader = compile(GL_VERTEX_SHADER, loadSource(vertexResourcePath));
         int fragmentShader = compile(GL_FRAGMENT_SHADER, loadSource(fragmentResourcePath));
 
-        programId = link(vertexShader, fragmentShader);
-
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
+        try {
+            programId = link(vertexShader, fragmentShader);
+        } finally {
+            // Always clean up the intermediate shader objects, including when link()
+            // throws - otherwise a failed link leaks both compiled shaders.
+            glDeleteShader(vertexShader);
+            glDeleteShader(fragmentShader);
+        }
     }
 
     public void use() {
@@ -34,12 +41,17 @@ public class Shader {
     }
 
     public void setUniformMat4(String name, Matrix4f matrix) {
-        int location = glGetUniformLocation(programId, name);
+        int location = uniformLocation(name);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             FloatBuffer buffer = stack.mallocFloat(16);
             matrix.get(buffer);
             glUniformMatrix4fv(location, false, buffer);
         }
+    }
+
+    private int uniformLocation(String name) {
+        return uniformLocationCache.computeIfAbsent(name,
+                uniformName -> glGetUniformLocation(programId, uniformName));
     }
 
     private static String loadSource(String resourcePath) {
