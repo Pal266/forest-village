@@ -64,5 +64,6 @@ mvn test
 
 ## Logs
 
-Each run writes a timestamped log to `logs/` (git-ignored) in addition to
-console output; see `src/main/resources/tinylog.properties`.
+Each run overwrites a single log file at `logs/forest-settlement.log`
+(git-ignored) in addition to console output; see
+`src/main/resources/tinylog.properties`.
