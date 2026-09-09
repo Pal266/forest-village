@@ -49,8 +49,6 @@ public class Main {
 
     private Callback debugCallback = null;
 
-    private long frameCount = 0;
-
     private final FixedTimestep clock = new FixedTimestep();
 
     private Shader shader;
@@ -231,7 +229,6 @@ public class Main {
             render();
             glfwPollEvents();
 
-            frameCount++;
             framesThisSecond++;
 
             diagnosticsTimer += frameTime;
