@@ -1,5 +1,6 @@
 package forestsettlement;
 
+import forestsettlement.camera.Camera;
 import forestsettlement.properties.SystemProperties;
 import forestsettlement.render.Mesh;
 import forestsettlement.render.Shader;
@@ -15,6 +16,7 @@ import org.lwjgl.system.Callback;
 import org.lwjgl.system.MemoryStack;
 import org.tinylog.Logger;
 
+import java.nio.DoubleBuffer;
 import java.nio.IntBuffer;
 
 import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
@@ -30,10 +32,18 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 public class Main {
 
     private static final Vector3f[] CUBE_POSITIONS = {
-            new Vector3f(-1.5f, 0f, -1f),
-            new Vector3f(0.0f, 0f, 0f),
-            new Vector3f(1.5f, 0f, 1f),
+            new Vector3f(-1.5f, 0.45f, -1f),
+            new Vector3f(0.0f, 0.45f, 0f),
+            new Vector3f(1.5f, 0.45f, 1f),
     };
+    private static final float PAN_SPEED = 6f; // world units per second
+    private static final double MAX_CAMERA_FRAME_TIME_SECONDS = 0.1; // guards a huge pan after a stall
+    private static final float ROTATE_SENSITIVITY = 0.25f; // degrees per pixel of mouse drag
+    private static final float ZOOM_SENSITIVITY = 1.5f; // distance units per scroll notch
+
+    private double lastCursorX;
+    private double lastCursorY;
+    private boolean rotatingCamera = false;
 
     private long window;
 
@@ -49,8 +59,6 @@ public class Main {
     private Mesh cubeMesh;
     private boolean cullingEnabled = true;
 
-    private Matrix4f view;
-
     private Matrix4f projection;
 
     private float fovDegrees = 60f;
@@ -59,6 +67,8 @@ public class Main {
 
     private int framebufferWidth = 1280;
     private int framebufferHeight = 720;
+
+    private final Camera camera = new Camera(new Vector3f(0f, 0f, 0f), 45f, 35f, 10f);
 
     private void run() {
         Logger.info("Forest Settlement — LWJGL {}", Version.getVersion());
@@ -103,6 +113,9 @@ public class Main {
         if (window == NULL) {
             throw new RuntimeException("Failed to create the GLFW window");
         }
+
+        glfwSetScrollCallback(window, (win, xOffset, yOffset) ->
+                camera.zoom((float) -yOffset * ZOOM_SENSITIVITY));
 
         glfwSetKeyCallback(window, (win, key, scancode, action, mods) -> {
             if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
@@ -177,12 +190,6 @@ public class Main {
         quadMesh = Mesh.quad();
         cubeMesh = Mesh.cube();
 
-        view = new Matrix4f().lookAt(
-                new Vector3f(0f, 3f, 6f),   // eye: where the camera sits
-                new Vector3f(0f, 0f, 0f),   // center: what it's looking at
-                new Vector3f(0f, 1f, 0f)    // up: which way is "up" for the camera
-        );
-
         try (MemoryStack stack = stackPush()) {
             IntBuffer pWidth = stack.mallocInt(1);
             IntBuffer pHeight = stack.mallocInt(1);
@@ -208,9 +215,12 @@ public class Main {
         long updatesThisSecond = 0;
 
         while (!glfwWindowShouldClose(window)) {
+
             double currentTime = glfwGetTime();
             double frameTime = currentTime - previousTime;
             previousTime = currentTime;
+
+            handleCameraInput(frameTime);
 
             int steps = clock.advance(frameTime);
             for (int i = 0; i < steps; i++) {
@@ -238,11 +248,14 @@ public class Main {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader.use();
-        shader.setUniformMat4("view", view);
         shader.setUniformMat4("projection", projection);
+        shader.setUniformMat4("view", camera.viewMatrix());
 
-        Matrix4f quadModel = new Matrix4f().identity().translate(0f, 1.5f, -2f);
-        shader.setUniformMat4("model", quadModel);
+        Matrix4f groundModel = new Matrix4f()
+                .identity()
+                .rotateX((float) Math.toRadians(-90f))
+                .scale(20f);
+        shader.setUniformMat4("model", groundModel);
         quadMesh.draw();
 
         float angle = (float) glfwGetTime();
@@ -270,6 +283,52 @@ public class Main {
         float aspect = (float) width / (float) height;
         return new Matrix4f().perspective(
                 (float) Math.toRadians(fovDegrees), aspect, nearPlane, farPlane);
+    }
+
+    private void handleCameraInput(double frameTime) {
+        double clampedFrameTime = Math.min(frameTime, MAX_CAMERA_FRAME_TIME_SECONDS);
+        float panDistance = (float) (PAN_SPEED * clampedFrameTime);
+
+        float forwardAmount = 0f;
+        float rightAmount = 0f;
+
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
+            forwardAmount += panDistance;
+        }
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+            forwardAmount -= panDistance;
+        }
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+            rightAmount += panDistance;
+        }
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+            rightAmount -= panDistance;
+        }
+
+        if (forwardAmount != 0f || rightAmount != 0f) {
+            camera.pan(rightAmount, forwardAmount);
+        }
+
+        try (MemoryStack stack = stackPush()) {
+            DoubleBuffer cursorX = stack.mallocDouble(1);
+            DoubleBuffer cursorY = stack.mallocDouble(1);
+            glfwGetCursorPos(window, cursorX, cursorY);
+
+            double currentCursorX = cursorX.get(0);
+            double currentCursorY = cursorY.get(0);
+
+            boolean rightButtonDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+
+            if (rightButtonDown && rotatingCamera) {
+                float deltaYaw = (float) (currentCursorX - lastCursorX) * ROTATE_SENSITIVITY;
+                float deltaPitch = (float) (currentCursorY - lastCursorY) * ROTATE_SENSITIVITY;
+                camera.rotate(deltaYaw, deltaPitch);
+            }
+
+            rotatingCamera = rightButtonDown;
+            lastCursorX = currentCursorX;
+            lastCursorY = currentCursorY;
+        }
     }
 
     public static void main(String[] args) {
