@@ -92,6 +92,9 @@ public class Main {
     }
 
     private void init() {
+        GLFWErrorCallback.create((error, description) ->
+                Logger.error("GLFW error {}: {}", error, GLFWErrorCallback.getDescription(description))
+        ).set();
 
         if (!glfwInit()) {
             throw new IllegalStateException("Unable to initialize GLFW");
@@ -113,9 +116,6 @@ public class Main {
 
         glfwSetScrollCallback(window, (win, xOffset, yOffset) ->
                 camera.zoom((float) -yOffset * ZOOM_SENSITIVITY));
-        GLFWErrorCallback.create((error, description) ->
-                Logger.error("GLFW error {}: {}", error, GLFWErrorCallback.getDescription(description))
-        ).set();
 
         glfwSetKeyCallback(window, (win, key, scancode, action, mods) -> {
             if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {
@@ -249,6 +249,7 @@ public class Main {
 
         shader.use();
         shader.setUniformMat4("projection", projection);
+        shader.setUniformMat4("view", camera.viewMatrix());
 
         Matrix4f groundModel = new Matrix4f()
                 .identity()
@@ -258,8 +259,6 @@ public class Main {
         quadMesh.draw();
 
         float angle = (float) glfwGetTime();
-
-        shader.setUniformMat4("view", camera.viewMatrix());
 
         for (Vector3f position : CUBE_POSITIONS) {
             Matrix4f cubeModel = new Matrix4f()
