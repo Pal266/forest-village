@@ -29,6 +29,12 @@ public class SystemProperties {
             return false;
         }
 
+        return parseDebugMode(properties);
+    }
+
+    // Split out from loadDebugMode() so the parsing rule itself (as opposed to
+    // the classpath I/O around it) can be unit tested directly.
+    static boolean parseDebugMode(Properties properties) {
         return Boolean.parseBoolean(properties.getProperty("debug", "false"));
     }
 }
