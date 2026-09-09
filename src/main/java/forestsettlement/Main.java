@@ -92,11 +92,6 @@ public class Main {
     }
 
     private void init() {
-        glfwSetScrollCallback(window, (win, xOffset, yOffset) ->
-                camera.zoom((float) -yOffset * ZOOM_SENSITIVITY));
-        GLFWErrorCallback.create((error, description) ->
-                Logger.error("GLFW error {}: {}", error, GLFWErrorCallback.getDescription(description))
-        ).set();
 
         if (!glfwInit()) {
             throw new IllegalStateException("Unable to initialize GLFW");
@@ -115,6 +110,12 @@ public class Main {
         if (window == NULL) {
             throw new RuntimeException("Failed to create the GLFW window");
         }
+
+        glfwSetScrollCallback(window, (win, xOffset, yOffset) ->
+                camera.zoom((float) -yOffset * ZOOM_SENSITIVITY));
+        GLFWErrorCallback.create((error, description) ->
+                Logger.error("GLFW error {}: {}", error, GLFWErrorCallback.getDescription(description))
+        ).set();
 
         glfwSetKeyCallback(window, (win, key, scancode, action, mods) -> {
             if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE) {

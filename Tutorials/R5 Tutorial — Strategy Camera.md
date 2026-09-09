@@ -1,4 +1,4 @@
-# R5 — Strategy Camera
+# R5 Tutorial — Strategy Camera
 
 A line\-by\-line tutorial: what each step does, why it exists, and what breaks if you skip it
 
@@ -61,7 +61,7 @@ public class Camera {
 
 ### Why
 
-`forestsettlement.camera` is a new package, deliberately separate from `forestsettlement.render` — the same reasoning R1 applied to `forestsettlement.time`\: this class has **zero imports from **`org.lwjgl.*`, only JOML types, so nothing about it depends on a window existing. That's what the roadmap means by "the camera exposes no OpenGL concepts to code outside the render layer" — taken further than strictly required, since `CameraTest` itself has no OpenGL concepts *at all*, not just none leaking past its own boundary.
+`forestsettlement.camera` is a new package, deliberately separate from `forestsettlement.render` — the same reasoning R1 applied to `forestsettlement.time`\: this class has **zero imports from `org.lwjgl.*`**, only JOML types, so nothing about it depends on a window existing. That's what the roadmap means by "the camera exposes no OpenGL concepts to code outside the render layer" — taken further than strictly required, since `Camera` itself has no OpenGL concepts *at all*, not just none leaking past its own boundary.
 
 `target` is stored as a defensive copy (`new Vector3f(target)`) rather than the reference the caller passed in, because `Vector3f` is mutable — without the copy, code elsewhere holding the original vector could silently move the camera's focus point out from under it.
 
@@ -69,7 +69,7 @@ The two clamp helpers exist for a reason that matters more once Step 2 introduce
 
 ### What happens if you skip it
 
-Nothing yet — this step only declares state, the same as R1's Step 2 for `FixedTimestep`. Skip the *separate package* part specifically, and nothing breaks today either, but it's the same standing invitation R1 warned about: once `CameraTest` and `Main` share a file or package, it's an easy reach to pull a GLFW constant or a window handle into what's supposed to be pure orbit math.
+Nothing yet — this step only declares state, the same as R1's Step 2 for `FixedTimestep`. Skip the *separate package* part specifically, and nothing breaks today either, but it's the same standing invitation R1 warned about: once `Camera` and `Main` share a file or package, it's an easy reach to pull a GLFW constant or a window handle into what's supposed to be pure orbit math.
 
 ## Step 2 — pan(), rotate(), zoom(): the mutators
 
@@ -79,10 +79,10 @@ Nothing yet — this step only declares state, the same as R1's Step 2 for `Fixe
 public void pan(float rightAmount, float forwardAmount) {
     float yawRadians = (float) Math.toRadians(yawDegrees);
 
-    float forwardX = (float) Math.sin(yawRadians);
-    float forwardZ = (float) Math.cos(yawRadians);
-    float rightX = forwardZ;
-    float rightZ = -forwardX;
+    float forwardX = -(float) Math.sin(yawRadians);
+    float forwardZ = -(float) Math.cos(yawRadians);
+    float rightX = -forwardZ;
+    float rightZ = forwardX;
 
     target.x += rightX * rightAmount + forwardX * forwardAmount;
     target.z += rightZ * rightAmount + forwardZ * forwardAmount;
@@ -100,15 +100,17 @@ public void zoom(float deltaDistance) {
 
 ### Why
 
-`pan()` moves `target` in the ground plane relative to which way the camera is currently facing, not relative to fixed world axes — `forwardAmount` moves toward whatever `yaw` is currently looking at, `rightAmount` strafes perpendicular to it. `forwardX`/`forwardZ` come straight from `yaw`; `right` is `forward` rotated 90° (`(forwardZ, -forwardX)` is the standard perpendicular\-in\-the\-XZ\-plane trick, no separate trig call needed). This is what makes W always mean "toward what I'm looking at" instead of "toward positive Z," regardless of how the camera has been rotated.
+`pan()` moves `target` in the ground plane relative to which way the camera is currently facing, not relative to fixed world axes — `forwardAmount` moves toward whatever `yaw` is currently looking at, `rightAmount` strafes perpendicular to it. `forwardX`/`forwardZ` are the *negation* of the offset `viewMatrix()` (Step 3) uses to place `eye` relative to `target` — `(sin(yaw), cos(yaw))` points from the focus point *toward* the camera, so the direction the camera actually looks (`eye → target`) is the negative of that. `right` is then derived from the corrected `forward` via the same rotate\-90° relationship as before (`(-forwardZ, forwardX)`, equivalent to the cross product of `forward` and world\-up), so strafing stays correct once `forward` is.
 
 `rotate()` only ever changes `pitchDegrees` through the clamp — `yawDegrees` is unbounded on purpose, since spinning all the way around a focus point is normal and there's no reason to stop it, while pitch has the hard physical limits Step 1 explained.
 
-`zoom()` is the same shape as `rotate()`'s pitch handling: add a delta, clamp the result, store it back. Neither method takes an absolute value — both take a *delta*, so the caller (Step 6\-8, in `Main`) decides how much per frame or per input event, and `CameraTest` only enforces the limits.
+`zoom()` is the same shape as `rotate()`'s pitch handling: add a delta, clamp the result, store it back. Neither method takes an absolute value — both take a *delta*, so the caller (Step 6\-8, in `Main`) decides how much per frame or per input event, and `Camera` only enforces the limits.
 
 ### What happens if you skip it
 
 Skip the `right`/`forward` decomposition in `pan()` and move `target` along raw world X/Z instead, and the camera works correctly only at `yaw = 0` — rotate the view at all, and pressing "forward" starts moving the camera sideways relative to what's on screen, which is disorienting in a way that's obvious the moment you actually rotate and try to pan.
+
+Get the negation on `forwardX`/`forwardZ` backwards — using `viewMatrix()`'s eye\-relative offset directly instead of its negation — and panning still looks plausible on paper (the math runs, nothing throws), but W visibly backs the camera away from the scene and S advances it: forward and backward are swapped, while strafing (A/D) still feels correct, since `right` happens to come out the same either way. That asymmetry — one axis wrong, the other fine — is exactly what makes it easy to miss until you actually try moving forward.
 
 ## Step 3 — viewMatrix(): turning yaw/pitch/distance into an eye position
 
@@ -146,7 +148,7 @@ Get `sin`/`cos` swapped between `horizontalDistance` and `height` and the camera
 
 ### What we're doing
 
-Add read\-only accessors to `CameraTest`\:
+Add read\-only accessors to `Camera`\:
 
 ```java
 public Vector3f target() {
@@ -240,7 +242,7 @@ mvn test
 
 ### Why
 
-Same motivation as R1's `FixedTimestepTest`\: `CameraTest` has no LWJGL imports, so it can be constructed directly with hand\-picked numbers and asserted against, with no window, no GLFW, no OpenGL context — six narrow tests, each targeting one specific claim (pitch clamps at both ends, distance clamps at both ends, panning never touches world\-space height). `target()` returns a defensive copy for the same reason the constructor takes one — a test (or, later, other code) holding onto that vector should never be able to mutate the camera's real state through it.
+Same motivation as R1's `FixedTimestepTest`\: `Camera` has no LWJGL imports, so it can be constructed directly with hand\-picked numbers and asserted against, with no window, no GLFW, no OpenGL context — six narrow tests, each targeting one specific claim (pitch clamps at both ends, distance clamps at both ends, panning never touches world\-space height). `target()` returns a defensive copy for the same reason the constructor takes one — a test (or, later, other code) holding onto that vector should never be able to mutate the camera's real state through it.
 
 ### What happens if you skip it
 
@@ -253,7 +255,10 @@ The camera still works correctly if the clamp math is right — but the clamps a
 Add the import and replace the `view` field:
 
 ```java
-import forestsettlement.camera.CameraTest;
+import forestsettlement.camera.Camera;
+```
+
+```java
 private final Camera camera = new Camera(new Vector3f(0f, 0f, 0f), 45f, 35f, 10f);
 ```
 
@@ -402,6 +407,9 @@ A constant and a new callback, registered in `init()` alongside the existing key
 
 ```java
 private static final float ZOOM_SENSITIVITY = 1.5f; // distance units per scroll notch
+```
+
+```java
 glfwSetScrollCallback(window, (win, xOffset, yOffset) ->
         camera.zoom((float) -yOffset * ZOOM_SENSITIVITY));
 ```
@@ -473,11 +481,13 @@ All `CameraTest` cases (and the existing `FixedTimestepTest` cases) should pass.
 
 - **The camera navigates a placeholder world comfortably.** Step 9's ground plane gives WASD panning, drag\-rotation, and scroll\-zoom (Steps 6–8) an actual world to move around in, rather than open space with nothing to judge movement against.
 - **Movement is frame\-rate independent.** Step 6's `panDistance` scales by real `frameTime`, the same quantity `FixedTimestep` consumes; drag\-rotation and scroll\-zoom are event\-driven (a pixel delta, a scroll notch) rather than time\-driven, so framerate doesn't enter into them at all.
-- **The camera exposes no OpenGL concepts to code outside the render layer.** `CameraTest` (Step 1) has zero `org.lwjgl.*` imports — it only accepts and returns JOML types (`Vector3f`, `Matrix4f`) and plain floats.
+- **The camera exposes no OpenGL concepts to code outside the render layer.** `Camera` (Step 1) has zero `org.lwjgl.*` imports — it only accepts and returns JOML types (`Vector3f`, `Matrix4f`) and plain floats.
 
 ## Troubleshooting
 
 **Holding W/A/S/D does nothing.** Confirm `handleCameraInput(frameTime)` is actually being called inside the `while` loop in `loop()` (Step 6) — it's easy to define the method and forget to call it every frame.
+
+**W moves the camera backward and S moves it forward (A/D feel fine).** `forwardX`/`forwardZ` in `pan()` (Step 2) are using `(sin(yaw), cos(yaw))` directly instead of its negation — that value is the offset from `target` to `eye` (which way the camera sits), not the direction the camera looks. Negate both.
 
 **The camera jumps sharply the instant you right\-click, before you've dragged anywhere.** The `rotatingCamera` guard from Step 7 is missing or was placed after the delta calculation instead of before it — the first frame of a click must skip computing a delta entirely.
 

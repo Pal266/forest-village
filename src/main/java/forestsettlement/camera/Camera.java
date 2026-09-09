@@ -26,10 +26,10 @@ public class Camera {
     public void pan(float rightAmount, float forwardAmount) {
         float yawRadians = (float) Math.toRadians(yawDegrees);
 
-        float forwardX = (float) Math.sin(yawRadians);
-        float forwardZ = (float) Math.cos(yawRadians);
-        float rightX = forwardZ;
-        float rightZ = -forwardX;
+        float forwardX = -(float) Math.sin(yawRadians);
+        float forwardZ = -(float) Math.cos(yawRadians);
+        float rightX = -forwardZ;
+        float rightZ = forwardX;
 
         target.x += rightX * rightAmount + forwardX * forwardAmount;
         target.z += rightZ * rightAmount + forwardZ * forwardAmount;
